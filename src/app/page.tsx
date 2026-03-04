@@ -8,19 +8,13 @@ import { ProfilesPanel } from "@/components/thumbnail/profiles-panel";
 
 export default function Home() {
   return (
-    <AppShell>
-      {(activeTab) => {
-        switch (activeTab) {
-          case "browse":
-            return <BrowsePanel />;
-          case "board":
-            return <StyleBoardPanel />;
-          case "generate":
-            return <GeneratePanel />;
-          case "profiles":
-            return <ProfilesPanel />;
-        }
+    <AppShell
+      panels={{
+        browse: <BrowsePanel />,
+        board: <StyleBoardPanel />,
+        generate: <GeneratePanel />,
+        profiles: <ProfilesPanel />,
       }}
-    </AppShell>
+    />
   );
 }

@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const results = await searchVideos(query || "US", {
+    const results = await searchVideos(query || "", {
       type,
       maxResults,
       order,

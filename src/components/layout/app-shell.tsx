@@ -11,13 +11,13 @@ const NAV_ITEMS = [
   { id: "profiles", label: "Profiles", icon: FolderOpen },
 ] as const;
 
-type TabId = (typeof NAV_ITEMS)[number]["id"];
+export type TabId = (typeof NAV_ITEMS)[number]["id"];
 
 interface AppShellProps {
-  children: (activeTab: TabId) => React.ReactNode;
+  panels: Record<TabId, React.ReactNode>;
 }
 
-export function AppShell({ children }: AppShellProps) {
+export function AppShell({ panels }: AppShellProps) {
   const [activeTab, setActiveTab] = useState<TabId>("browse");
 
   return (
@@ -47,8 +47,20 @@ export function AppShell({ children }: AppShellProps) {
         </nav>
       </header>
 
-      {/* Content */}
-      <main className="flex-1 overflow-auto">{children(activeTab)}</main>
+      {/* Content — all panels stay mounted, only the active one is visible */}
+      <main className="relative flex-1 overflow-hidden">
+        {NAV_ITEMS.map((item) => (
+          <div
+            key={item.id}
+            className={cn(
+              "absolute inset-0 overflow-auto",
+              activeTab === item.id ? "visible" : "invisible"
+            )}
+          >
+            {panels[item.id]}
+          </div>
+        ))}
+      </main>
     </div>
   );
 }

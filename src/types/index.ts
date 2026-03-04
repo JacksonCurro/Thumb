@@ -33,6 +33,7 @@ export interface StyleProfile {
   backgroundType?: BackgroundType;
   textEffect?: TextEffect;
   energyLevel?: EnergyLevel;
+  contrastLevel?: ContrastLevel;
   graphicElements?: string[];
   moodTags: string[];
   rawDescriptors: string;
@@ -123,6 +124,8 @@ export interface CreativeBrief {
 
 // ─── Extraction Result (raw from vision API) ─────────────────────────────────
 
+export type ContrastLevel = "high" | "medium" | "low";
+
 export interface ExtractionResult {
   palette: {
     dominant: string[];
@@ -137,6 +140,11 @@ export interface ExtractionResult {
     caseStyle: CaseStyle;
     sizeHierarchy: SizeHierarchy;
   };
+  lighting: LightingStyle;
+  backgroundType: BackgroundType;
+  textEffect: TextEffect;
+  energyLevel: EnergyLevel;
+  contrastLevel: ContrastLevel;
   moodTags: string[];
   rawDescriptors: string;
 }

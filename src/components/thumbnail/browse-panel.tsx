@@ -33,11 +33,14 @@ export function BrowsePanel() {
     setLoading(true);
     try {
       const params = new URLSearchParams({
-        q: searchType === "trending" ? "" : query,
         type: searchType,
         maxResults: "24",
         order: sortOrder,
       });
+
+      if (searchType !== "trending" && query.trim()) {
+        params.set("q", query);
+      }
 
       if (duration !== "any") params.set("videoDuration", duration);
 

@@ -18,6 +18,11 @@ export const styleProfiles = pgTable("style_profiles", {
   palette: jsonb("palette").notNull(), // { dominant: string[], accent: string[] }
   layout: jsonb("layout").notNull(), // { subjectPosition, textZone }
   typography: jsonb("typography").notNull(), // { weightStyle, caseStyle, sizeHierarchy }
+  lighting: varchar("lighting", { length: 20 }),
+  backgroundType: varchar("background_type", { length: 20 }),
+  textEffect: varchar("text_effect", { length: 20 }),
+  energyLevel: varchar("energy_level", { length: 20 }),
+  contrastLevel: varchar("contrast_level", { length: 20 }),
   moodTags: jsonb("mood_tags").notNull(), // string[]
   rawDescriptors: text("raw_descriptors").notNull(),
   promptVersion: varchar("prompt_version", { length: 20 }).notNull(),

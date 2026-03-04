@@ -24,22 +24,33 @@ export async function generateThumbnails(options: {
   referenceImageBuffer?: Buffer;
   characterImageBuffer?: Buffer;
   numImages?: number;
+  preview?: boolean;
+  styleReferenceWeight?: number;
 }): Promise<GenerationResult> {
   const apiKey = process.env.IDEOGRAM_API_KEY;
   if (!apiKey) throw new Error("IDEOGRAM_API_KEY not configured");
 
-  const { profile, brief, referenceImageBuffer, characterImageBuffer, numImages = 3 } = options;
+  const {
+    profile, brief, referenceImageBuffer, characterImageBuffer,
+    numImages = 3, preview = false, styleReferenceWeight = 0.7,
+  } = options;
 
   const prompt = buildGenerationPrompt(profile, brief);
+
+  // Determine style_type based on profile mood — DESIGN for graphic/text-heavy,
+  // REALISTIC for face-centric thumbnails, AUTO when using character references
+  const styleType = characterImageBuffer
+    ? "AUTO"
+    : inferStyleType(profile);
 
   const formData = new FormData();
   formData.append("prompt", prompt);
   formData.append("aspect_ratio", "16x9");
   formData.append("num_images", String(numImages));
-  formData.append("rendering_speed", "DEFAULT");
-  formData.append("magic_prompt", "ON");
-  formData.append("style_type", characterImageBuffer ? "AUTO" : "GENERAL");
-  formData.append("negative_prompt", "blurry, low quality, watermark, cropped, letterbox, black bars, distorted text, misspelled text");
+  formData.append("rendering_speed", preview ? "TURBO" : "QUALITY");
+  formData.append("magic_prompt", "OFF");
+  formData.append("style_type", styleType);
+  formData.append("negative_prompt", "blurry text, illegible text, distorted face, extra fingers, watermark, border, letterboxing, low contrast, muted colors, cluttered background, amateur, stock photo, overexposed, text errors, misspelled text, black bars, cropped");
 
   // AUTO style_type supports both character and style references together
   if (characterImageBuffer) {
@@ -51,6 +62,7 @@ export async function generateThumbnails(options: {
     const uint8 = new Uint8Array(referenceImageBuffer);
     const blob = new Blob([uint8], { type: "image/jpeg" });
     formData.append("style_reference_images", blob, "reference.jpg");
+    formData.append("style_reference_weight", String(styleReferenceWeight));
   }
 
   // Pass the extracted colour palette (not compatible with character reference)
@@ -96,4 +108,26 @@ export async function generateThumbnails(options: {
   }
 
   return { images };
+}
+
+/**
+ * Infer the best Ideogram style_type from the profile's mood tags.
+ * DESIGN = graphic/text-heavy thumbnails (bold, flat, neon, outlined, etc.)
+ * REALISTIC = face-centric, photographic thumbnails (cinematic, bokeh, etc.)
+ */
+function inferStyleType(profile: StyleProfile): string {
+  const tags = new Set(profile.moodTags);
+  const designSignals = ["flat-design", "neon", "outlined", "3d-effect", "hand-drawn", "collage", "gradient", "maximalist", "grunge", "retro"];
+  const realisticSignals = ["cinematic", "bokeh", "sharp", "vignette"];
+
+  let designScore = 0;
+  let realisticScore = 0;
+  for (const tag of tags) {
+    if (designSignals.includes(tag)) designScore++;
+    if (realisticSignals.includes(tag)) realisticScore++;
+  }
+
+  if (designScore > realisticScore) return "DESIGN";
+  if (realisticScore > designScore) return "REALISTIC";
+  return "DESIGN"; // default — most thumbnails are graphic-heavy
 }
