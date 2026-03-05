@@ -13,6 +13,7 @@ import {
   X,
   Pencil,
   Check,
+  Layers,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,7 @@ export function GeneratePanel() {
   const [characterBase64, setCharacterBase64] = useState<string | null>(null);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [promptExpanded, setPromptExpanded] = useState(false);
+  const [exportingIndex, setExportingIndex] = useState<number | null>(null);
 
   const profileItems = items.filter((i) => i.extractedProfile);
 
@@ -154,6 +156,50 @@ export function GeneratePanel() {
       if (!url.startsWith("data:")) URL.revokeObjectURL(a.href);
     } catch {
       toast.error("Download failed");
+    }
+  };
+
+  const exportLayeredSVG = async (url: string, index: number) => {
+    setExportingIndex(index);
+    try {
+      const profiles = selectedItems.map((i) => i.extractedProfile!);
+      const styleProfile = profiles[0];
+      const brief: CreativeBrief = {
+        videoTitle,
+        description,
+        textOverlay: noText ? undefined : (textOverlay || undefined),
+        targetAudience: targetAudience || undefined,
+        noText,
+      };
+
+      const res = await fetch("/api/export/layered-svg", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageDataUrl: url, styleProfile, brief }),
+      });
+
+      const data = await res.json();
+
+      if (data.error) {
+        toast.error("SVG export failed", { description: data.error });
+        return;
+      }
+
+      // Download the SVG
+      const blob = new Blob([data.svg], { type: "image/svg+xml" });
+      const a = document.createElement("a");
+      a.download = data.filename || `thumbnail-layered-${Date.now()}.svg`;
+      a.href = URL.createObjectURL(blob);
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+
+      toast.success("Layered SVG exported");
+    } catch {
+      toast.error("SVG export failed — check your connection");
+    } finally {
+      setExportingIndex(null);
     }
   };
 
@@ -381,6 +427,19 @@ export function GeneratePanel() {
                       >
                         <Download className="mr-1 h-3 w-3" />
                         Download
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => exportLayeredSVG(output.url, i)}
+                        disabled={exportingIndex !== null}
+                      >
+                        {exportingIndex === i ? (
+                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                        ) : (
+                          <Layers className="mr-1 h-3 w-3" />
+                        )}
+                        SVG
                       </Button>
                     </div>
                   </div>
