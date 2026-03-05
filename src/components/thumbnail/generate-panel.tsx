@@ -11,6 +11,7 @@ import {
   AlertCircle,
   UserPlus,
   X,
+  Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,7 @@ import {
 } from "@/components/ui/select";
 import { useStyleBoardStore } from "@/stores/style-board-store";
 import { useGenerationStore } from "@/stores/generation-store";
+import { EditModal } from "./edit-modal";
 import type { CreativeBrief, JobOutput } from "@/types";
 
 export function GeneratePanel() {
@@ -47,6 +49,7 @@ export function GeneratePanel() {
   const [error, setError] = useState<string | null>(null);
   const [characterImage, setCharacterImage] = useState<string | null>(null); // data URL
   const [characterBase64, setCharacterBase64] = useState<string | null>(null); // raw base64
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
 
   const profileItems = items.filter((i) => i.extractedProfile);
 
@@ -351,7 +354,10 @@ export function GeneratePanel() {
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               {generatedImages.map((output, i) => (
                 <Card key={i} className="overflow-hidden p-0">
-                  <div className="relative aspect-video">
+                  <div
+                    className="relative aspect-video cursor-pointer transition-opacity hover:opacity-90"
+                    onClick={() => setEditingIndex(i)}
+                  >
                     <Image
                       src={output.url}
                       alt={`Variation ${i + 1}`}
@@ -364,14 +370,24 @@ export function GeneratePanel() {
                     <span className="text-xs text-muted-foreground">
                       Variation {i + 1}
                     </span>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => downloadImage(output.url, i)}
-                    >
-                      <Download className="mr-1 h-3 w-3" />
-                      Download
-                    </Button>
+                    <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setEditingIndex(i)}
+                      >
+                        <Pencil className="mr-1 h-3 w-3" />
+                        Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => downloadImage(output.url, i)}
+                      >
+                        <Download className="mr-1 h-3 w-3" />
+                        Download
+                      </Button>
+                    </div>
                   </div>
                 </Card>
               ))}
@@ -419,6 +435,23 @@ export function GeneratePanel() {
           </Card>
         )}
       </div>
+
+      {/* Edit modal */}
+      {editingIndex !== null && generatedImages[editingIndex] && (
+        <EditModal
+          open
+          onClose={() => setEditingIndex(null)}
+          imageUrl={generatedImages[editingIndex].url}
+          variationIndex={editingIndex}
+          onAccept={(editedUrl) => {
+            setGeneratedImages((prev) =>
+              prev.map((img, i) =>
+                i === editingIndex ? { ...img, url: editedUrl } : img
+              )
+            );
+          }}
+        />
+      )}
     </div>
   );
 }

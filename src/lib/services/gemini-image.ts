@@ -89,6 +89,32 @@ export async function generateThumbnails(options: {
   return { images };
 }
 
+/**
+ * Edits an existing image using Gemini — sends the image back with
+ * a modification instruction and returns the edited version.
+ */
+export async function editImage(options: {
+  imageDataUrl: string;
+  editInstruction: string;
+}): Promise<string> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("GEMINI_API_KEY not configured");
+
+  const { imageDataUrl, editInstruction } = options;
+
+  // Extract base64 and mime from data URL
+  const match = imageDataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
+  if (!match) throw new Error("Invalid image data URL");
+  const [, mimeType, base64Data] = match;
+
+  const parts: GeminiPart[] = [
+    { text: `Edit this image. Apply this change: ${editInstruction}. Keep everything else exactly the same — only modify what was specifically requested. Return the full edited image.` },
+    { inlineData: { mimeType, data: base64Data } },
+  ];
+
+  return callGemini(apiKey, parts);
+}
+
 // ─── Gemini API types & call ──────────────────────────────────────────────────
 
 type GeminiPart =
