@@ -1,43 +1,59 @@
 import { NextRequest, NextResponse } from "next/server";
-import { buildGenerationPrompt } from "@/lib/services/prompt-builder";
+import { buildGenerationPrompt, mergeProfiles } from "@/lib/services/prompt-builder";
 import { generateThumbnails } from "@/lib/services/gemini-image";
 import type { StyleProfile, CreativeBrief, ThumbnailJob } from "@/types";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { profile, brief, referenceImageUrl, characterImageBase64 } = body as {
-      profile: StyleProfile;
+    const {
+      profile,
+      profiles,
+      brief,
+      referenceImageUrl,
+      referenceImageUrls,
+      characterImageBase64,
+    } = body as {
+      profile?: StyleProfile;
+      profiles?: StyleProfile[];
       brief: CreativeBrief;
       referenceImageUrl?: string;
+      referenceImageUrls?: string[];
       characterImageBase64?: string;
     };
 
-    if (!profile || !brief) {
+    // Support both single and multi-profile (backward compatible)
+    const allProfiles = profiles ?? (profile ? [profile] : []);
+    const allRefUrls = referenceImageUrls ?? (referenceImageUrl ? [referenceImageUrl] : []);
+
+    if (allProfiles.length === 0 || !brief) {
       return NextResponse.json(
-        { error: "Both profile and brief are required" },
+        { error: "At least one profile and a brief are required" },
         { status: 400 }
       );
     }
 
-    const generatedPrompt = buildGenerationPrompt(profile, brief);
+    // Merge profiles if multiple
+    const mergedProfile = mergeProfiles(allProfiles);
+    const generatedPrompt = buildGenerationPrompt(mergedProfile, brief);
 
-    // Fetch the reference thumbnail server-side for style reference
-    let referenceImageBuffer: Buffer | undefined;
-    if (referenceImageUrl && !referenceImageUrl.startsWith("data:")) {
+    // Fetch all reference thumbnails server-side
+    const referenceImageBuffers: Buffer[] = [];
+    for (const url of allRefUrls) {
       try {
-        const imgRes = await fetch(referenceImageUrl);
-        if (imgRes.ok) {
-          referenceImageBuffer = Buffer.from(await imgRes.arrayBuffer());
+        if (url.startsWith("data:")) {
+          const base64Data = url.split(",")[1];
+          if (base64Data) {
+            referenceImageBuffers.push(Buffer.from(base64Data, "base64"));
+          }
+        } else {
+          const imgRes = await fetch(url);
+          if (imgRes.ok) {
+            referenceImageBuffers.push(Buffer.from(await imgRes.arrayBuffer()));
+          }
         }
       } catch {
-        // Reference image fetch failed — generate without it
-      }
-    } else if (referenceImageUrl?.startsWith("data:")) {
-      // Handle base64 uploaded images
-      const base64Data = referenceImageUrl.split(",")[1];
-      if (base64Data) {
-        referenceImageBuffer = Buffer.from(base64Data, "base64");
+        // Skip failed fetches
       }
     }
 
@@ -47,13 +63,12 @@ export async function POST(request: NextRequest) {
       characterImageBuffer = Buffer.from(characterImageBase64, "base64");
     }
 
-    // Check if Ideogram API key is configured
+    // Check if Gemini API key is configured
     if (!process.env.GEMINI_API_KEY) {
-      // No image gen API — return prompt only
       const job: ThumbnailJob = {
         id: crypto.randomUUID(),
         userId: "demo-user",
-        styleProfileId: profile.id,
+        styleProfileId: mergedProfile.id,
         brief: brief.videoTitle,
         generatedPrompt,
         status: "complete",
@@ -68,11 +83,12 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Generate with Ideogram
+    // Generate with Gemini
     const result = await generateThumbnails({
-      profile,
+      profile: mergedProfile,
       brief,
-      referenceImageBuffer,
+      referenceImageBuffers:
+        referenceImageBuffers.length > 0 ? referenceImageBuffers : undefined,
       characterImageBuffer,
       numImages: 3,
     });
@@ -80,7 +96,7 @@ export async function POST(request: NextRequest) {
     const job: ThumbnailJob = {
       id: crypto.randomUUID(),
       userId: "demo-user",
-      styleProfileId: profile.id,
+      styleProfileId: mergedProfile.id,
       brief: brief.videoTitle,
       generatedPrompt,
       status: "complete",
@@ -98,7 +114,7 @@ export async function POST(request: NextRequest) {
       await db().insert(schema.thumbnailJobs).values({
         id: job.id,
         userId: job.userId,
-        styleProfileId: profile.id,
+        styleProfileId: mergedProfile.id,
         brief: job.brief,
         generatedPrompt: job.generatedPrompt,
         status: job.status,

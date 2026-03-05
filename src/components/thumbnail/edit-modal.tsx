@@ -105,7 +105,7 @@ export function EditModal({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="!max-w-[90vw] !w-[90vw]">
         <DialogHeader>
           <DialogTitle>Edit Variation {variationIndex + 1}</DialogTitle>
         </DialogHeader>

@@ -21,7 +21,7 @@ export interface GenerationResult {
 export async function generateThumbnails(options: {
   profile: StyleProfile;
   brief: CreativeBrief;
-  referenceImageBuffer?: Buffer;
+  referenceImageBuffers?: Buffer[];
   characterImageBuffer?: Buffer;
   numImages?: number;
   preview?: boolean;
@@ -30,23 +30,35 @@ export async function generateThumbnails(options: {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY not configured");
 
-  const { profile, brief, referenceImageBuffer, characterImageBuffer, numImages = 3 } = options;
+  const { profile, brief, referenceImageBuffers = [], characterImageBuffer, numImages = 3 } = options;
 
   const prompt = buildGenerationPrompt(profile, brief);
 
   // Build parts: reference images first (primes the model), then prompt
   const parts: GeminiPart[] = [];
 
-  if (referenceImageBuffer) {
+  if (referenceImageBuffers.length === 1) {
     parts.push({
       text: "Use this image as a style reference. Match its visual style, colour palette, composition approach, and energy — but generate completely new content based on the prompt below. Do not copy or reproduce specific elements, logos, or UI from this image.",
     });
     parts.push({
       inlineData: {
         mimeType: "image/jpeg",
-        data: referenceImageBuffer.toString("base64"),
+        data: referenceImageBuffers[0].toString("base64"),
       },
     });
+  } else if (referenceImageBuffers.length > 1) {
+    parts.push({
+      text: `Here are ${referenceImageBuffers.length} images for creative inspiration only. Do NOT replicate or blend these images together. Instead, study what makes each one visually compelling — their use of colour theory, contrast, spatial tension, typography energy, and emotional tone. Then create something completely original that feels like it belongs in the same creative universe but stands on its own as a fresh, distinctive design. Do not copy any specific elements, logos, text, UI, or compositions from these images.`,
+    });
+    for (const buf of referenceImageBuffers) {
+      parts.push({
+        inlineData: {
+          mimeType: "image/jpeg",
+          data: buf.toString("base64"),
+        },
+      });
+    }
   }
 
   if (characterImageBuffer) {
@@ -62,6 +74,11 @@ export async function generateThumbnails(options: {
   }
 
   parts.push({ text: prompt });
+
+  // Reinforce no-text at the end (recency bias — last instruction carries weight)
+  if (brief.noText) {
+    parts.push({ text: "CRITICAL: This image must contain absolutely NO text, letters, words, numbers, or typography of any kind. Generate a purely visual image." });
+  }
 
   // Gemini returns 1 image per call — fire N requests in parallel
   const requests = Array.from({ length: numImages }, () =>

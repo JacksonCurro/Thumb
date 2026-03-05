@@ -27,10 +27,10 @@ export function buildGenerationPrompt(
   sections.push(buildLightingSection(profile));
 
   // ─── 4. Colour Palette ─────────────────────────────────────────────
-  sections.push(buildPaletteSection(profile));
+  sections.push(buildPaletteSection(profile, brief.noText));
 
   // ─── 5. Layout / Composition (film vocabulary) ─────────────────────
-  sections.push(buildLayoutSection(profile));
+  sections.push(buildLayoutSection(profile, brief.noText));
 
   // ─── 6. Background Treatment ───────────────────────────────────────
   sections.push(buildBackgroundSection(profile));
@@ -38,8 +38,10 @@ export function buildGenerationPrompt(
   // ─── 7. Mood & Style (rawDescriptors carry the "soul" of the style) ─
   sections.push(buildMoodSection(profile));
 
-  // ─── 8. Text Overlay (last — least reliable in diffusion models) ───
-  if (brief.textOverlay) {
+  // ─── 8. Text Overlay or No-Text instruction ──────────────────────
+  if (brief.noText) {
+    sections.push("IMPORTANT: Do NOT render any text, letters, words, numbers, typography, or written content anywhere in the image. The thumbnail must be purely visual with zero text elements.");
+  } else if (brief.textOverlay) {
     sections.push(buildTextSection(brief.textOverlay, profile));
   }
 
@@ -78,25 +80,30 @@ function buildLightingSection(profile: StyleProfile): string {
   return `Lighting: ${lightingMap[lighting] || lightingMap.dramatic}.`;
 }
 
-function buildPaletteSection(profile: StyleProfile): string {
+function buildPaletteSection(profile: StyleProfile, noText?: boolean): string {
   const { dominant, accent } = profile.palette;
 
   const dominantStr = dominant.join(", ");
   const accentStr = accent.join(", ");
 
-  return `Colour palette: dominant fills are ${dominantStr}, accent/highlight colours are ${accentStr}. Use these exact colours — do not introduce unrelated hues. Dominant colours fill the majority of the frame; accents for emphasis and text.`;
+  return `Colour palette: dominant fills are ${dominantStr}, accent/highlight colours are ${accentStr}. Use these exact colours — do not introduce unrelated hues. Dominant colours fill the majority of the frame; accents for emphasis${noText ? "" : " and text"}.`;
 }
 
-function buildLayoutSection(profile: StyleProfile): string {
-  const { subjectPosition, textZone } = profile.layout;
+function buildLayoutSection(profile: StyleProfile, noText?: boolean): string {
+  const { subjectPosition } = profile.layout;
 
   const positionMap: Record<string, string> = {
-    left: "Subject fills the left third of frame, leaving right side open for text or negative space. Rule of thirds, subject eyes at upper-left power point",
+    left: "Subject fills the left third of frame, leaving right side open for negative space. Rule of thirds, subject eyes at upper-left power point",
     right: "Subject fills the right third of frame, leaving left side open. Rule of thirds, subject at right power point",
     center: "Subject placed centrally in frame, symmetrical composition, f/1.8 shallow depth of field separating subject from background",
     full: "Subject fills the entire frame edge-to-edge, tight crop, maximum visual impact",
   };
 
+  if (noText) {
+    return `Composition: ${positionMap[subjectPosition]}. Use the full frame for visual content — no space reserved for text.`;
+  }
+
+  const { textZone } = profile.layout;
   const textZoneMap: Record<string, string> = {
     top: "Text placed in the upper portion of the frame, above the subject, with clear separation",
     bottom: "Text placed in the lower portion of the frame, below or overlapping the bottom of the subject",
@@ -184,6 +191,55 @@ function buildEnergySection(profile: StyleProfile): string {
   const contrast = profile.contrastLevel || "high";
 
   return `${energyMap[energy]}. ${contrastMap[contrast]}.`;
+}
+
+/**
+ * Merge multiple StyleProfiles into one for multi-style generation.
+ * First profile is "primary" (layout, background, lighting).
+ * Palettes and mood tags are blended from all profiles.
+ */
+export function mergeProfiles(profiles: StyleProfile[]): StyleProfile {
+  if (profiles.length === 0) throw new Error("No profiles to merge");
+  if (profiles.length === 1) return profiles[0];
+
+  const primary = profiles[0];
+  const secondary = profiles.slice(1);
+
+  // Palette: primary's dominant colours stay, pull only accent inspiration from others
+  const accentPool = [...new Set([
+    ...primary.palette.accent,
+    ...secondary.flatMap((p) => p.palette.accent.slice(0, 1)),
+  ])];
+
+  // Mood: primary's tags first, then pick at most 1 unique tag per secondary
+  const primaryTags = new Set(primary.moodTags);
+  const extraTags = secondary
+    .flatMap((p) => p.moodTags.filter((t) => !primaryTags.has(t)).slice(0, 1));
+  const moodTags = [...primary.moodTags, ...extraTags];
+
+  // Descriptors: use only the primary's raw descriptors — avoids conflicting instructions
+  // but note the inspirational sources
+  const sourceNames = secondary.map((p) => p.name).join(", ");
+  const descriptors = `${primary.rawDescriptors}. Inspired by creative elements from: ${sourceNames}.`;
+
+  // Energy: average rather than max — prevents always going explosive
+  const energyRank: Record<string, number> = { calm: 0, moderate: 1, high: 2, explosive: 3 };
+  const energyLabels = ["calm", "moderate", "high", "explosive"] as const;
+  const avgEnergy = Math.round(
+    profiles.reduce((sum, p) => sum + (energyRank[p.energyLevel || "high"] ?? 2), 0) / profiles.length
+  );
+
+  return {
+    ...primary,
+    name: profiles.map((p) => p.name).join(" + "),
+    palette: {
+      dominant: primary.palette.dominant,
+      accent: accentPool.slice(0, 4),
+    },
+    moodTags,
+    rawDescriptors: descriptors,
+    energyLevel: energyLabels[avgEnergy],
+  };
 }
 
 /**

@@ -120,6 +120,7 @@ export interface CreativeBrief {
   targetAudience?: string;
   talkingPoints?: string;
   textOverlay?: string;
+  noText?: boolean;
 }
 
 // ─── Extraction Result (raw from vision API) ─────────────────────────────────

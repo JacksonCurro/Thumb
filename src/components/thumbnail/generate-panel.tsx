@@ -12,6 +12,7 @@ import {
   UserPlus,
   X,
   Pencil,
+  Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -21,41 +22,42 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useStyleBoardStore } from "@/stores/style-board-store";
 import { useGenerationStore } from "@/stores/generation-store";
 import { EditModal } from "./edit-modal";
-import type { CreativeBrief, JobOutput } from "@/types";
+import type { CreativeBrief, JobOutput, StyleBoardItem } from "@/types";
 
 export function GeneratePanel() {
   const { items } = useStyleBoardStore();
   const { setCurrentJob, setBrief, setActiveProfile } = useGenerationStore();
 
-  const [selectedProfileId, setSelectedProfileId] = useState<string>("");
+  const [selectedProfileIds, setSelectedProfileIds] = useState<string[]>([]);
   const [videoTitle, setVideoTitle] = useState("");
   const [description, setDescription] = useState("");
   const [textOverlay, setTextOverlay] = useState("");
   const [targetAudience, setTargetAudience] = useState("");
+  const [noText, setNoText] = useState(false);
   const [generatedPrompt, setGeneratedPrompt] = useState<string | null>(null);
   const [generatedImages, setGeneratedImages] = useState<JobOutput[]>([]);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [characterImage, setCharacterImage] = useState<string | null>(null); // data URL
-  const [characterBase64, setCharacterBase64] = useState<string | null>(null); // raw base64
+  const [characterImage, setCharacterImage] = useState<string | null>(null);
+  const [characterBase64, setCharacterBase64] = useState<string | null>(null);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [promptExpanded, setPromptExpanded] = useState(false);
 
   const profileItems = items.filter((i) => i.extractedProfile);
 
-  const selectedItem = profileItems.find(
-    (i) => i.extractedProfile?.id === selectedProfileId
+  const selectedItems = profileItems.filter(
+    (i) => selectedProfileIds.includes(i.extractedProfile!.id)
   );
+
+  const toggleProfile = (id: string) => {
+    setSelectedProfileIds((prev) =>
+      prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]
+    );
+  };
 
   const handleCharacterUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -71,14 +73,16 @@ export function GeneratePanel() {
   };
 
   const handleGenerate = async () => {
-    if (!selectedItem?.extractedProfile || !videoTitle.trim()) return;
+    if (selectedItems.length === 0 || !videoTitle.trim()) return;
 
-    const profile = selectedItem.extractedProfile;
+    const profiles = selectedItems.map((i) => i.extractedProfile!);
+    const referenceImageUrls = selectedItems.map((i) => i.thumbnailUrl);
     const brief: CreativeBrief = {
       videoTitle,
       description,
-      textOverlay: textOverlay || undefined,
+      textOverlay: noText ? undefined : (textOverlay || undefined),
       targetAudience: targetAudience || undefined,
+      noText,
     };
 
     setLoading(true);
@@ -91,9 +95,9 @@ export function GeneratePanel() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          profile,
+          profiles,
           brief,
-          referenceImageUrl: selectedItem.thumbnailUrl,
+          referenceImageUrls,
           characterImageBase64: characterBase64 || undefined,
         }),
       });
@@ -109,7 +113,7 @@ export function GeneratePanel() {
       setGeneratedPrompt(data.prompt);
       setCurrentJob(data.job);
       setBrief(brief);
-      setActiveProfile(profile);
+      setActiveProfile(profiles[0]);
 
       if (data.job.outputs?.length > 0) {
         setGeneratedImages(data.job.outputs);
@@ -156,67 +160,37 @@ export function GeneratePanel() {
   return (
     <div className="flex h-full gap-6 overflow-auto p-6">
       {/* Left: Brief input */}
-      <div className="flex w-[400px] shrink-0 flex-col gap-4">
+      <div className="flex w-[520px] shrink-0 flex-col gap-4">
         <h2 className="text-lg font-semibold">Creative Brief</h2>
 
-        {/* Style profile selector */}
+        {/* Style profile selector — multi-select */}
         <div className="space-y-2">
-          <Label>Style Profile</Label>
+          <div className="flex items-center justify-between">
+            <Label>Style Profiles</Label>
+            {selectedProfileIds.length > 1 && (
+              <Badge variant="secondary" className="text-[10px]">
+                {selectedProfileIds.length} selected — styles will be combined
+              </Badge>
+            )}
+          </div>
           {profileItems.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No extracted profiles yet. Go to Style Board and extract styles
               from thumbnails first.
             </p>
           ) : (
-            <Select
-              value={selectedProfileId}
-              onValueChange={setSelectedProfileId}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Choose a style profile..." />
-              </SelectTrigger>
-              <SelectContent>
-                {profileItems.map((item) => (
-                  <SelectItem
-                    key={item.extractedProfile!.id}
-                    value={item.extractedProfile!.id}
-                  >
-                    {item.extractedProfile!.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="grid grid-cols-3 gap-2">
+              {profileItems.map((item) => (
+                <ProfileCard
+                  key={item.extractedProfile!.id}
+                  item={item}
+                  selected={selectedProfileIds.includes(item.extractedProfile!.id)}
+                  onToggle={() => toggleProfile(item.extractedProfile!.id)}
+                />
+              ))}
+            </div>
           )}
         </div>
-
-        {/* Reference thumbnail preview */}
-        {selectedItem && (
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">
-              Style reference
-            </Label>
-            <div className="relative aspect-video w-full overflow-hidden rounded-lg border border-border">
-              <Image
-                src={selectedItem.thumbnailUrl}
-                alt="Style reference"
-                fill
-                className="object-cover"
-                {...(selectedItem.source === "upload"
-                  ? { unoptimized: true }
-                  : {})}
-              />
-            </div>
-            <div className="flex flex-wrap gap-1">
-              {selectedItem.extractedProfile?.moodTags
-                .slice(0, 4)
-                .map((tag) => (
-                  <Badge key={tag} variant="outline" className="text-[10px]">
-                    {tag}
-                  </Badge>
-                ))}
-            </div>
-          </div>
-        )}
 
         {/* Character / Model reference */}
         <div className="space-y-2">
@@ -295,16 +269,35 @@ export function GeneratePanel() {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="textOverlay">Text Overlay</Label>
-          <Input
-            id="textOverlay"
-            value={textOverlay}
-            onChange={(e) => setTextOverlay(e.target.value)}
-            placeholder="e.g. 10 CSS TRICKS"
-          />
-          <p className="text-xs text-muted-foreground">
-            The exact text displayed on the thumbnail
-          </p>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="textOverlay">Text Overlay</Label>
+            <label className="flex cursor-pointer items-center gap-1.5">
+              <input
+                type="checkbox"
+                checked={noText}
+                onChange={(e) => setNoText(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-border"
+              />
+              <span className="text-xs text-muted-foreground">No text</span>
+            </label>
+          </div>
+          {noText ? (
+            <p className="text-xs text-muted-foreground">
+              The thumbnail will be generated without any text or typography
+            </p>
+          ) : (
+            <>
+              <Input
+                id="textOverlay"
+                value={textOverlay}
+                onChange={(e) => setTextOverlay(e.target.value)}
+                placeholder="e.g. 10 CSS TRICKS"
+              />
+              <p className="text-xs text-muted-foreground">
+                The exact text displayed on the thumbnail
+              </p>
+            </>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -319,7 +312,7 @@ export function GeneratePanel() {
 
         <Button
           onClick={handleGenerate}
-          disabled={!selectedProfileId || !videoTitle.trim() || loading}
+          disabled={selectedProfileIds.length === 0 || !videoTitle.trim() || loading}
           className="mt-2"
           size="lg"
         >
@@ -331,7 +324,9 @@ export function GeneratePanel() {
           ) : (
             <>
               <Sparkles className="mr-2 h-4 w-4" />
-              Generate Thumbnail
+              {selectedProfileIds.length > 1
+                ? `Generate from ${selectedProfileIds.length} Styles`
+                : "Generate Thumbnail"}
             </>
           )}
         </Button>
@@ -351,9 +346,9 @@ export function GeneratePanel() {
         {/* Generated images */}
         {generatedImages.length > 0 ? (
           <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4">
               {generatedImages.map((output, i) => (
-                <Card key={i} className="overflow-hidden p-0">
+                <Card key={i} className="max-w-md overflow-hidden p-0">
                   <div
                     className="relative aspect-video cursor-pointer transition-opacity hover:opacity-90"
                     onClick={() => setEditingIndex(i)}
@@ -428,9 +423,16 @@ export function GeneratePanel() {
               </Button>
             </CardHeader>
             <CardContent>
-              <p className="whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
+              <p className={`whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground ${promptExpanded ? "" : "line-clamp-3"}`}>
                 {generatedPrompt}
               </p>
+              <button
+                type="button"
+                onClick={() => setPromptExpanded((v) => !v)}
+                className="mt-1 text-xs font-medium text-primary hover:underline"
+              >
+                {promptExpanded ? "Show less" : "Read more"}
+              </button>
             </CardContent>
           </Card>
         )}
@@ -453,5 +455,56 @@ export function GeneratePanel() {
         />
       )}
     </div>
+  );
+}
+
+// ─── Profile Card (clickable multi-select) ────────────────────────────────────
+
+function ProfileCard({
+  item,
+  selected,
+  onToggle,
+}: {
+  item: StyleBoardItem;
+  selected: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={`relative overflow-hidden rounded-lg border-2 text-left transition-all ${
+        selected
+          ? "border-primary ring-1 ring-primary/30"
+          : "border-border hover:border-muted-foreground/30"
+      }`}
+    >
+      <div className="relative aspect-video">
+        <Image
+          src={item.thumbnailUrl}
+          alt={item.extractedProfile!.name}
+          fill
+          className="object-cover"
+          {...(item.source === "upload" ? { unoptimized: true } : {})}
+        />
+        {selected && (
+          <div className="absolute top-1.5 right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary">
+            <Check className="h-3 w-3 text-primary-foreground" />
+          </div>
+        )}
+      </div>
+      <div className="p-1.5">
+        <p className="truncate text-[11px] font-medium">
+          {item.extractedProfile!.name}
+        </p>
+        <div className="mt-0.5 flex flex-wrap gap-0.5">
+          {item.extractedProfile!.moodTags.slice(0, 2).map((tag) => (
+            <Badge key={tag} variant="outline" className="text-[9px] px-1 py-0">
+              {tag}
+            </Badge>
+          ))}
+        </div>
+      </div>
+    </button>
   );
 }
