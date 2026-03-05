@@ -1,34 +1,49 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { buildGenerationPrompt, mergeProfiles } from "@/lib/services/prompt-builder";
 import { generateThumbnails } from "@/lib/services/gemini-image";
 import type { StyleProfile, CreativeBrief, ThumbnailJob } from "@/types";
 
+const generateSchema = z.object({
+  profile: z.object({}).passthrough().optional(),
+  profiles: z.array(z.object({}).passthrough()).optional(),
+  brief: z.object({
+    videoTitle: z.string().min(1).max(500),
+    description: z.string().max(2000).optional(),
+    textOverlay: z.string().max(200).optional(),
+    targetAudience: z.string().max(200).optional(),
+    noText: z.boolean().optional(),
+  }).passthrough(),
+  referenceImageUrl: z.string().optional(),
+  referenceImageUrls: z.array(z.string()).optional(),
+  characterImageBase64: z.string().optional(),
+});
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const {
-      profile,
-      profiles,
-      brief,
-      referenceImageUrl,
-      referenceImageUrls,
-      characterImageBase64,
-    } = body as {
-      profile?: StyleProfile;
-      profiles?: StyleProfile[];
-      brief: CreativeBrief;
-      referenceImageUrl?: string;
-      referenceImageUrls?: string[];
-      characterImageBase64?: string;
-    };
+    const parsed = generateSchema.safeParse(body);
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.issues[0].message },
+        { status: 400 }
+      );
+    }
+
+    const data = parsed.data;
+    const brief = data.brief as CreativeBrief;
+    const referenceImageUrls = data.referenceImageUrls;
+    const referenceImageUrl = data.referenceImageUrl;
+    const characterImageBase64 = data.characterImageBase64;
 
     // Support both single and multi-profile (backward compatible)
-    const allProfiles = profiles ?? (profile ? [profile] : []);
+    const allProfiles = (data.profiles ?? (data.profile ? [data.profile] : [])) as unknown as StyleProfile[];
     const allRefUrls = referenceImageUrls ?? (referenceImageUrl ? [referenceImageUrl] : []);
 
-    if (allProfiles.length === 0 || !brief) {
+    if (allProfiles.length === 0) {
       return NextResponse.json(
-        { error: "At least one profile and a brief are required" },
+        { error: "At least one profile is required" },
         { status: 400 }
       );
     }

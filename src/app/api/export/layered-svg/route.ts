@@ -1,25 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import {
   decomposeImage,
   buildLayeredSVG,
 } from "@/lib/services/layered-svg-export";
-import type { StyleProfile, CreativeBrief } from "@/types";
+
+const exportSchema = z.object({
+  imageDataUrl: z.string().min(1),
+  styleProfile: z.object({}).passthrough(),
+  brief: z.object({
+    videoTitle: z.string().optional(),
+    noText: z.boolean().optional(),
+    textOverlay: z.string().optional(),
+  }).passthrough(),
+});
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { imageDataUrl, styleProfile, brief } = body as {
-      imageDataUrl: string;
-      styleProfile: StyleProfile;
-      brief: CreativeBrief;
-    };
+    const parsed = exportSchema.safeParse(body);
 
-    if (!imageDataUrl) {
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: "imageDataUrl is required" },
+        { error: parsed.error.issues[0].message },
         { status: 400 }
       );
     }
+
+    const { imageDataUrl, brief } = parsed.data;
 
     // Determine if the thumbnail has text to extract
     const hasText = !brief.noText && !!brief.textOverlay;

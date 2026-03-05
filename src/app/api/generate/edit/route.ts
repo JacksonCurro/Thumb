@@ -1,19 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { editImage } from "@/lib/services/gemini-image";
+
+const editSchema = z.object({
+  imageDataUrl: z.string().min(1),
+  editInstruction: z.string().min(1).max(1000),
+});
 
 export async function POST(request: NextRequest) {
   try {
-    const { imageDataUrl, editInstruction } = (await request.json()) as {
-      imageDataUrl: string;
-      editInstruction: string;
-    };
+    const body = await request.json();
+    const parsed = editSchema.safeParse(body);
 
-    if (!imageDataUrl || !editInstruction) {
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: "imageDataUrl and editInstruction are required" },
+        { error: parsed.error.issues[0].message },
         { status: 400 }
       );
     }
+
+    const { imageDataUrl, editInstruction } = parsed.data;
 
     const editedImageUrl = await editImage({ imageDataUrl, editInstruction });
 

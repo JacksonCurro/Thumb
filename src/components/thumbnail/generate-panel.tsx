@@ -104,6 +104,13 @@ export function GeneratePanel() {
         }),
       });
 
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "Unknown error");
+        setError(`Server error (${res.status})`);
+        toast.error("Generation failed", { description: errText });
+        return;
+      }
+
       const data = await res.json();
 
       if (data.error) {
@@ -177,6 +184,13 @@ export function GeneratePanel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ imageDataUrl: url, styleProfile, brief }),
       });
+
+      if (!res.ok) {
+        toast.error("SVG export failed", {
+          description: `Server returned ${res.status}`,
+        });
+        return;
+      }
 
       const data = await res.json();
 

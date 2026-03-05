@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { eq } from "drizzle-orm";
 
 export async function GET() {
@@ -16,14 +17,25 @@ export async function GET() {
   }
 }
 
+const styleBoardPostSchema = z.object({
+  source: z.string().min(1),
+  thumbnailUrl: z.string().min(1),
+  title: z.string().min(1).max(500),
+});
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { source, thumbnailUrl, title } = body as {
-      source: string;
-      thumbnailUrl: string;
-      title: string;
-    };
+    const parsed = styleBoardPostSchema.safeParse(body);
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.issues[0].message },
+        { status: 400 }
+      );
+    }
+
+    const { source, thumbnailUrl, title } = parsed.data;
 
     const { db, schema } = await import("@/lib/db");
     const [item] = await db()
@@ -48,12 +60,21 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const { id } = await request.json();
+    const body = await request.json();
+    const { id } = body as { id: string };
 
-    const { db, schema } = await import("@/lib/db");
-    await db()
-      .delete(schema.styleBoardItems)
-      .where(eq(schema.styleBoardItems.id, id));
+    if (!id) {
+      return NextResponse.json({ error: "id is required" }, { status: 400 });
+    }
+
+    try {
+      const { db, schema } = await import("@/lib/db");
+      await db()
+        .delete(schema.styleBoardItems)
+        .where(eq(schema.styleBoardItems.id, id));
+    } catch {
+      // DB not available — item will be removed client-side via Zustand
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

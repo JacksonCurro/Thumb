@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { Search, TrendingUp, User, SlidersHorizontal } from "lucide-react";
+import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -45,17 +46,23 @@ export function BrowsePanel() {
       if (duration !== "any") params.set("videoDuration", duration);
 
       const res = await fetch(`/api/youtube/search?${params}`);
+      if (!res.ok) {
+        toast.error("Search failed", {
+          description: `Server returned ${res.status}`,
+        });
+        return;
+      }
       const data = await res.json();
 
       if (data.error) {
-        console.error(data.error);
+        toast.error("Search failed", { description: data.error });
         return;
       }
 
       setResults(data.results || []);
       setQuotaUsed(data.meta?.quotaCost || null);
-    } catch (error) {
-      console.error("Search failed:", error);
+    } catch {
+      toast.error("Search failed — check your connection");
     } finally {
       setLoading(false);
     }

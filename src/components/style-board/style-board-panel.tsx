@@ -82,6 +82,13 @@ export function StyleBoardPanel() {
         body: JSON.stringify(body),
       });
 
+      if (!res.ok) {
+        toast.error("Extraction failed", {
+          description: `Server returned ${res.status}`,
+        });
+        return;
+      }
+
       const data = await res.json();
 
       if (data.error) {

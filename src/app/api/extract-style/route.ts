@@ -1,22 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { extractStyleFromImage } from "@/lib/services/style-extraction";
+
+const extractStyleSchema = z
+  .object({
+    imageBase64: z.string().optional(),
+    imageUrl: z.string().url().optional(),
+    mediaType: z
+      .enum(["image/jpeg", "image/png", "image/webp", "image/gif"])
+      .optional(),
+    name: z.string().max(200).optional(),
+  })
+  .refine((d) => d.imageBase64 || d.imageUrl, {
+    message: "Either imageBase64 or imageUrl is required",
+  });
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { imageBase64, imageUrl, mediaType, name } = body as {
-      imageBase64?: string;
-      imageUrl?: string;
-      mediaType?: "image/jpeg" | "image/png" | "image/webp" | "image/gif";
-      name?: string;
-    };
+    const parsed = extractStyleSchema.safeParse(body);
 
-    if (!imageBase64 && !imageUrl) {
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: "Either imageBase64 or imageUrl is required" },
+        { error: parsed.error.issues[0].message },
         { status: 400 }
       );
     }
+
+    const { imageBase64, imageUrl, mediaType, name } = parsed.data;
 
     let base64Data: string;
     let resolvedMediaType: "image/jpeg" | "image/png" | "image/webp" | "image/gif" =

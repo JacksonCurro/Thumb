@@ -58,6 +58,13 @@ export function EditModal({
         }),
       });
 
+      if (!res.ok) {
+        toast.error("Edit failed", {
+          description: `Server returned ${res.status}`,
+        });
+        return;
+      }
+
       const data = await res.json();
 
       if (data.error) {

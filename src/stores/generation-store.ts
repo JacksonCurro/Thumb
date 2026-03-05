@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import type { ThumbnailJob, CreativeBrief, StyleProfile } from "@/types";
 
 interface GenerationState {
@@ -14,33 +15,40 @@ interface GenerationState {
   clearCurrentJob: () => void;
 }
 
-export const useGenerationStore = create<GenerationState>()((set) => ({
-  currentBrief: null,
-  activeProfile: null,
-  currentJob: null,
-  jobHistory: [],
+export const useGenerationStore = create<GenerationState>()(
+  persist(
+    (set) => ({
+      currentBrief: null,
+      activeProfile: null,
+      currentJob: null,
+      jobHistory: [],
 
-  setBrief: (brief) => set({ currentBrief: brief }),
+      setBrief: (brief) => set({ currentBrief: brief }),
 
-  setActiveProfile: (profile) => set({ activeProfile: profile }),
+      setActiveProfile: (profile) => set({ activeProfile: profile }),
 
-  setCurrentJob: (job) =>
-    set((state) => ({
-      currentJob: job,
-      jobHistory: [job, ...state.jobHistory],
-    })),
+      setCurrentJob: (job) =>
+        set((state) => ({
+          currentJob: job,
+          jobHistory: [job, ...state.jobHistory].slice(0, 50),
+        })),
 
-  updateJobStatus: (update) =>
-    set((state) => {
-      if (!state.currentJob) return state;
-      const updated = { ...state.currentJob, ...update };
-      return {
-        currentJob: updated,
-        jobHistory: state.jobHistory.map((j) =>
-          j.id === updated.id ? updated : j
-        ),
-      };
+      updateJobStatus: (update) =>
+        set((state) => {
+          if (!state.currentJob) return state;
+          const updated = { ...state.currentJob, ...update };
+          return {
+            currentJob: updated,
+            jobHistory: state.jobHistory.map((j) =>
+              j.id === updated.id ? updated : j
+            ),
+          };
+        }),
+
+      clearCurrentJob: () => set({ currentJob: null }),
     }),
-
-  clearCurrentJob: () => set({ currentJob: null }),
-}));
+    {
+      name: "thumbnail-os-generation",
+    }
+  )
+);
