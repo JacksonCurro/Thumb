@@ -132,16 +132,19 @@ export function GeneratePanel() {
 
   const downloadImage = async (url: string, index: number) => {
     try {
-      const res = await fetch(url);
-      const blob = await res.blob();
-      const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = blobUrl;
       a.download = `thumbnail-v${index + 1}-${Date.now()}.png`;
+      if (url.startsWith("data:")) {
+        a.href = url;
+      } else {
+        const res = await fetch(url);
+        const blob = await res.blob();
+        a.href = URL.createObjectURL(blob);
+      }
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
+      if (!url.startsWith("data:")) URL.revokeObjectURL(a.href);
     } catch {
       toast.error("Download failed");
     }

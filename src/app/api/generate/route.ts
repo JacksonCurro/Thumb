@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildGenerationPrompt } from "@/lib/services/prompt-builder";
-import { generateThumbnails } from "@/lib/services/ideogram";
+import { generateThumbnails } from "@/lib/services/gemini-image";
 import type { StyleProfile, CreativeBrief, ThumbnailJob } from "@/types";
 
 export async function POST(request: NextRequest) {
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if Ideogram API key is configured
-    if (!process.env.IDEOGRAM_API_KEY) {
+    if (!process.env.GEMINI_API_KEY) {
       // No image gen API — return prompt only
       const job: ThumbnailJob = {
         id: crypto.randomUUID(),
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         job,
         prompt: generatedPrompt,
-        note: "IDEOGRAM_API_KEY not configured — showing prompt only",
+        note: "GEMINI_API_KEY not configured — showing prompt only",
       });
     }
 

@@ -39,7 +39,7 @@ export async function generateThumbnails(options: {
 
   // Determine style_type based on profile mood — DESIGN for graphic/text-heavy,
   // REALISTIC for face-centric thumbnails, AUTO when using character references
-  const styleType = characterImageBuffer
+  const styleType = (referenceImageBuffer || characterImageBuffer)
     ? "AUTO"
     : inferStyleType(profile);
 
