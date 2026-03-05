@@ -31,7 +31,7 @@ setInterval(() => {
 
 const PUBLIC_PATHS = ["/login", "/api/auth/login"];
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Rate-limit API routes
@@ -60,7 +60,7 @@ export function middleware(request: NextRequest) {
 
   // Check session cookie
   const session = request.cookies.get(COOKIE_NAME)?.value;
-  if (!isValidSession(session)) {
+  if (!(await isValidSession(session))) {
     const loginUrl = new URL("/login", request.url);
     return NextResponse.redirect(loginUrl);
   }

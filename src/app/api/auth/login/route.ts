@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
     if (!accessPassword) {
       // No password configured — allow access (dev mode)
       const res = NextResponse.json({ success: true });
-      const { name, value, options } = getSessionCookie();
+      const { name, value, options } = await getSessionCookie();
       res.cookies.set(name, value, options);
       return res;
     }
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     }
 
     const res = NextResponse.json({ success: true });
-    const { name, value, options } = getSessionCookie();
+    const { name, value, options } = await getSessionCookie();
     res.cookies.set(name, value, options);
     return res;
   } catch {

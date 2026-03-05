@@ -1,20 +1,34 @@
-import { createHmac } from "crypto";
 import type { ResponseCookie } from "next/dist/compiled/@edge-runtime/cookies";
 
 const COOKIE_NAME = "thumbnail-os-session";
-const SESSION_PAYLOAD = "thumbnail-os-authenticated";
 const SEVEN_DAYS = 60 * 60 * 24 * 7;
 
-function getSecret(): string {
-  return process.env.ACCESS_PASSWORD || "dev-fallback-secret";
+// Simple token: base64 of "authenticated:<password-hash>"
+// This runs in Edge runtime, so we use Web Crypto API
+async function generateToken(): Promise<string> {
+  const secret = process.env.ACCESS_PASSWORD || "dev-fallback-secret";
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    encoder.encode("thumbnail-os-authenticated")
+  );
+  return btoa(String.fromCharCode(...new Uint8Array(signature)));
 }
 
-function sign(payload: string): string {
-  return createHmac("sha256", getSecret()).update(payload).digest("hex");
-}
-
-export function getSessionCookie(): { name: string; value: string; options: Partial<ResponseCookie> } {
-  const token = sign(SESSION_PAYLOAD);
+export async function getSessionCookie(): Promise<{
+  name: string;
+  value: string;
+  options: Partial<ResponseCookie>;
+}> {
+  const token = await generateToken();
   return {
     name: COOKIE_NAME,
     value: token,
@@ -28,9 +42,11 @@ export function getSessionCookie(): { name: string; value: string; options: Part
   };
 }
 
-export function isValidSession(cookieValue: string | undefined): boolean {
+export async function isValidSession(
+  cookieValue: string | undefined
+): Promise<boolean> {
   if (!cookieValue) return false;
-  const expected = sign(SESSION_PAYLOAD);
+  const expected = await generateToken();
   return cookieValue === expected;
 }
 
