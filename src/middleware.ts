@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { COOKIE_NAME, isValidSession } from "@/lib/auth";
 
-// Simple in-memory rate limiter for API routes
-// Vercel serverless: each instance has its own map, so this is per-instance
-// Good enough for POC — upgrade to Upstash Redis for production
+// ─── Rate Limiting ──────────────────────────────────────────────────────────
+
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-
-const RATE_LIMIT = 30; // requests per window
-const WINDOW_MS = 60_000; // 1 minute
+const RATE_LIMIT = 30;
+const WINDOW_MS = 60_000;
 
 function isRateLimited(ip: string): boolean {
   const now = Date.now();
@@ -21,7 +20,6 @@ function isRateLimited(ip: string): boolean {
   return entry.count > RATE_LIMIT;
 }
 
-// Clean up stale entries every 5 minutes
 setInterval(() => {
   const now = Date.now();
   for (const [key, value] of rateLimitMap) {
@@ -29,27 +27,47 @@ setInterval(() => {
   }
 }, 5 * 60_000);
 
+// ─── Middleware ──────────────────────────────────────────────────────────────
+
+const PUBLIC_PATHS = ["/login", "/api/auth/login"];
+
 export function middleware(request: NextRequest) {
-  // Only rate-limit API routes
-  if (!request.nextUrl.pathname.startsWith("/api/")) {
+  const { pathname } = request.nextUrl;
+
+  // Rate-limit API routes
+  if (pathname.startsWith("/api/")) {
+    const ip =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      request.headers.get("x-real-ip") ||
+      "unknown";
+
+    if (isRateLimited(ip)) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        { status: 429 }
+      );
+    }
+  }
+
+  // Skip auth for public paths and static assets
+  if (
+    PUBLIC_PATHS.some((p) => pathname.startsWith(p)) ||
+    pathname.startsWith("/_next/") ||
+    pathname.startsWith("/favicon")
+  ) {
     return NextResponse.next();
   }
 
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    request.headers.get("x-real-ip") ||
-    "unknown";
-
-  if (isRateLimited(ip)) {
-    return NextResponse.json(
-      { error: "Too many requests. Please try again later." },
-      { status: 429 }
-    );
+  // Check session cookie
+  const session = request.cookies.get(COOKIE_NAME)?.value;
+  if (!isValidSession(session)) {
+    const loginUrl = new URL("/login", request.url);
+    return NextResponse.redirect(loginUrl);
   }
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: "/api/:path*",
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
