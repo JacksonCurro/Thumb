@@ -7,6 +7,8 @@ const editSchema = z.object({
   editInstruction: z.string().min(1).max(1000),
 });
 
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
