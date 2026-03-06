@@ -59,10 +59,22 @@ jobs:
           - Do NOT push or create a PR — that is handled separately." \
             --allowedTools "Edit,Write,Read,Glob,Grep,Bash(git add:*),Bash(git commit:*)"
 
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet main; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "No changes were made by Claude Code"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Push branch
+        if: steps.changes.outputs.has_changes == 'true'
         run: git push origin "feature/trello-${{ github.event.inputs.card_id }}"
 
       - name: Create PR
+        if: steps.changes.outputs.has_changes == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CARD_ID: ${{ github.event.inputs.card_id }}
