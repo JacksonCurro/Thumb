@@ -59,12 +59,20 @@ jobs:
           - Do NOT push or create a PR — that is handled separately." \
             --allowedTools "Edit,Write,Read,Glob,Grep,Bash(git add:*),Bash(git commit:*)"
 
+      - name: Auto-commit if Claude Code forgot
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "Found uncommitted changes, auto-committing..."
+            git add -A
+            git commit -m "feat: $(echo "${{ github.event.inputs.card_name }}" | head -c 72)"
+          fi
+
       - name: Check for changes
         id: changes
         run: |
-          if git diff --quiet main; then
+          if [ "$(git rev-list --count main..HEAD)" -eq 0 ]; then
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
-            echo "No changes were made by Claude Code"
+            echo "No commits were made"
           else
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
           fi
