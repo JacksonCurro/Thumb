@@ -45,9 +45,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          claude --print \
-            --allowedTools "Edit,Write,Read,Glob,Grep,Bash(git add:*),Bash(git commit:*)" \
-            --message "You have a task from Trello card \"${{ github.event.inputs.card_name }}\".
+          claude -p "You have a task from Trello card \"${{ github.event.inputs.card_name }}\".
 
           ## Task Spec
           ${{ github.event.inputs.spec }}
@@ -58,7 +56,8 @@ jobs:
           - Write clean, readable TypeScript following existing codebase patterns.
           - Do not install new dependencies unless absolutely necessary.
           - Stage and commit your changes with a clear, descriptive message.
-          - Do NOT push or create a PR — that is handled separately."
+          - Do NOT push or create a PR — that is handled separately." \
+            --allowedTools "Edit,Write,Read,Glob,Grep,Bash(git add:*),Bash(git commit:*)"
 
       - name: Push branch
         run: git push origin "feature/trello-${{ github.event.inputs.card_id }}"
